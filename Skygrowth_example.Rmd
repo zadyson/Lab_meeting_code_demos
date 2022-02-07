@@ -1,0 +1,128 @@
+---
+title: "skygrowth_example_v1"
+author: "Zoe A. Dyson, zoe.dyson(at)lshtm.ac.uk"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    number_sections: TRUE
+    fig_width: 8
+    fig_height: 8
+---
+
+## Setup knitr
+```{r setup_knitr}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages & track versions
+```{r load_packages}
+# R version
+R.Version()$version.string
+
+# Wrangling
+library(tidyverse)
+packageVersion("tidyverse")
+
+library(lubridate)
+packageVersion("lubridate")
+
+# Phylo
+library(skygrowth)
+packageVersion("skygrowth") #Note github install via devtools
+
+library(ape)
+packageVersion("ape")
+
+library(treeio)
+packageVersion("treeio")
+
+library(ggtree)
+packageVersion("ggtree")
+
+# Plotting
+library(ggplot2)
+packageVersion("ggplot2")
+
+# Reporting
+library(knitr)
+packageVersion("knitr")
+
+library(prettydoc)
+packageVersion("prettydoc")
+
+```
+
+## Setup custom operators and variables
+```{r make_custom_operators}
+
+# Make not in 
+`%notin%` <- Negate(`%in%`)
+
+# Set seed
+set.seed(3551)
+
+```
+
+## Import data
+```{r import_data}
+
+# Import BEAST tree
+tree <- read.beast("beast.tree")
+
+```
+
+
+## Skygrowth Analysis
+- Note: parameters specific to organism and dataset (will need to be changed if appplied to other organisms and datasets).  
+```{r skygrowth}
+
+# MAP analysis - change params for different data
+fit <- skygrowth.map(tree@phylo, 
+                            res=34*2, # Ne changes 2 weeks
+                            tau0 = .1,# Smoothing param (example code & Ingle et al)
+                            gamma=365/30, # WHO infectious period
+                            quiet=T) # Turn off output to console
+
+# Get drift param
+cat('Drift parameter tau: ',fit$tau)
+
+# Summarise model output
+summary(fit)
+
+# Plot effective population size over time
+neplot(fit) 
+
+# Run slower MCMC version (more accurate CIs) - change params for different data
+mcmcfit <- skygrowth.mcmc(tree@phylo, 
+                                 res=34*2, # Ne changes every 2 weeks
+                                 tau0=0.1, # Smoothing param
+                                 mhsteps = 1e+06, #chain length/steps
+                                 gamma=365/30, # WHO infectious period
+                                 quiet=T) # Turn off logging to console
+
+# Adjust dates (to plot as years)- change data for different data
+mcmcfit$time <- mcmcfit$time + decimal_date(ymd("2019-08-09")) 
+
+# Plot effective population size over time
+neplot(mcmcfit)  + scale_y_log10()
+
+# Plot drfit/smoothing param (tau)
+plot(mcmcfit$tau,type='l',ylab='tau',xlab='Iterations',
+     main="MCMC tau over iterations") 
+
+# Summarise model output
+summary(mcmcfit)
+
+# Plot growth rate over time
+growth.plot(mcmcfit) + 
+  ggtitle("MCMC Ne growth rate")
+
+# Get R0 - change params for different data
+summary(as.numeric(computeR(mcmcfit, gamma=365/30)$R))
+
+# Plot R0 - change params for different data
+R.plot(mcmcfit, gamma = 365/30, ggplot = TRUE) 
+
+
+```
