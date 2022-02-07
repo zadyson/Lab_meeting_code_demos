@@ -1,6 +1,6 @@
 ---
 title: "Scatterpie show and tell demo"
-author: "Zoe A. Dyson"
+author: "Zoe A. Dyson, zoe.dyson(at)lshtm.ac.uk"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   prettydoc::html_pretty:
