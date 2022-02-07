@@ -1,0 +1,225 @@
+---
+title: "Scatterpie show and tell demo"
+author: "Zoe A. Dyson"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    number_sections: TRUE
+    fig_width: 64
+    fig_height: 96
+---
+
+## Set up knitr
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import required packages
+```{r import_packages}
+
+# Reporting
+library(knitr)
+
+# Wrangling
+library(tidyverse)
+
+# Map and GPS data
+library(rgeos)
+library(rworldmap)
+
+# Plotting
+library(ggplot2)
+library(scatterpie)
+
+```
+
+## Document versions
+```{r log_verions}
+
+# R
+sessionInfo()$R.version$version.string
+
+# Packages
+# Reporting
+packageVersion("knitr")
+
+# Wrangling
+packageVersion("tidyverse")
+
+# Map and GPS data
+packageVersion("rgeos")
+packageVersion("rworldmap")
+
+# Plotting
+packageVersion("ggplot2")
+packageVersion("scatterpie")
+
+```
+
+## Import data
+```{r import_data}
+
+# Import master data sheet
+typhi <- read_csv("metadata.csv")
+
+# Show data structure
+typhi %>% head() %>% kable()
+
+```
+
+
+## Set up colour dictionaries
+```{r set_col_dicts}
+
+# Set Typhi genotype colours
+genotype_cols <- c("0"="black",
+                   "0.0.1"="#000000","0.0.2"="#000000","0.0.3"="#000000",
+                   "0.1.0"="#808080","0.1"="#808080","0.1.1"="#808080",
+                   "1.1.2"="#ffff00",
+                   "1.2.1"="#ffd700",
+                   "2.0.0"="#32cd32","2"="#32cd32","2.0.1"="#32cd32",
+                   "2.0.2"="#32cd32",
+                   "2.1.0"="#adff2f","2.1"="#adff2f","2.1.1"="#adff2f",
+                   "2.1.2"="#adff2f","2.1.3"="#adff2f",
+                   "2.1.5"="#adff2f",
+                   "2.1.6"="#adff2f","2.1.7"="#adff2f","2.1.7.1"="#adff2f",
+                   "2.1.7.2"="#adff2f","2.1.8"="#adff2f",
+                   "2.1.9"="#adff2f",
+                   "2.2.0"="#98fb98","2.2.1"="#98fb98","2.2.2"="#98fb98",
+                   "2.2.3"="#98fb98","2.2.4"="#98fb98",
+                   "2.3.1"="#6b8e23","2.3.2"="#6b8e23","2.3.3"="#6b8e23",
+                   "2.3.4"="#6b8e23","2.3.5"="#6b8e23",
+                   "2.4.0"="#2e8b57","2.4"="#2e8b57","2.4.1"="#2e8b57",
+                   "2.5.0"="#006400","2.5"="#006400","2.5.1"="#006400","2.5.2"="#006400",
+                   "3.0.0"="#0000cd","3"="#0000cd","3.0.1"="#0000cd","3.0.2"="#0000cd",
+                   "3.1.0"="#4682b4","3.1"="#4682b4","3.1.1"="#4682b4","3.1.2"="#4682b4",
+                   "3.2.1"="#00bfff","3.2"="#00bfff","3.2.2"="#00bfff",
+                   "3.3.0"="#1e90ff","3.3"="#1e90ff","3.3.1"="#1e90ff",
+                   "3.3.2"="#1e90ff",
+                   "3.3.2.Bd1"="#1e90ff",
+                   "3.3.2.Bd2"="#1e90ff",
+                   "3.4.0"="#6a5acd",
+                   "3.5.0"="#4b0082","3.5.1"="#4b0082","3.5.2"="#4b0082",
+                   "3.5.3"="#4b0082","3.5.4"="#4b0082",
+                   "4"="#8b0000","4.1.0"="#8b0000","4.1"="#8b0000","4.1.1"="#8b0000",
+                   "4.2.0"="#ff6347","4.2.1"="#ff6347","4.2.2"="#ff6347","4.2.3"="#ff6347",
+                   "4.3.0"="#ff0000", 
+                   "4.3.1"="#ff0000","4.3.1.1"="#f1b6da","4.3.1.1.EA1"="#f1b6da",
+                   "4.3.1.1.P1"="black",
+                   "4.3.1.2"="#c51b7d","4.3.1.2.EA2"="#c51b7d","4.3.1.2.EA3"="#c51b7d",
+                   "4.3.1.3"="#fb8072",
+                   "4.3.1.3.Bdq"="#fb8072",
+                   "4.3"="#ff0000",
+                   "3.3"="#1e90ff",
+                   "2.2"="#98fb98",
+                   "2.3"="#6b8e23",
+                   "2.0"="#32cd32",
+                   "3.2"="#00bfff",
+                   "4.1"="#8b0000")
+```
+
+
+
+## Data Wrangling: sequenced travel-associated caeses of S. Typhi
+```{r summarise_typhi_data}
+
+# Get centroid position in latitude and longitude for each country
+geo_coords <- as.data.frame(gCentroid(getMap(resolution="high"), byid=TRUE)) %>%
+  rownames_to_column(var = "Country_Origin") %>%
+  rename(latitude = x) %>%
+  rename(longitude = y) %>%
+  mutate(Country_Origin = gsub("United Republic of Tanzania","Tanzania",Country_Origin)) %>%
+  mutate(Country_Origin = gsub("United States of America","USA",Country_Origin)) %>%  
+  mutate(Country_Origin = gsub("Vietnam","Viet Nam",Country_Origin)) %>%  
+  mutate(Country_Origin = gsub("East Timor","Timor-Leste",Country_Origin)) %>%  
+  mutate(Country_Origin = gsub("Ivory Coast","Cote d'Ivoire",Country_Origin))
+
+# Show centroid data frame structure
+as.data.frame(gCentroid(getMap(resolution="high"), byid=TRUE)) %>% head() %>% kable()
+
+# Show merged data frame
+geo_coords %>% head() %>% kable()
+
+# Filter Typhi data and merge count data with centroid coordinates  
+typhi_pies <- typhi %>%
+  filter(Exclude=="-") %>%
+  filter(grepl("Non Targeted", `Purpose of Sampling`)) %>%
+  filter(`Travel Associated`=="Yes") %>% 
+  filter(Country_Origin!="Not Provided") %>%
+  filter(Year!="Not Provided") %>%
+  group_by(Country_Origin, Final_genotype) %>%
+  count() %>%
+  filter(n>0) %>%
+  left_join(geo_coords, by="Country_Origin") %>% # Add missing data
+  mutate(latitude = ifelse(Country_Origin == "State of Palestine",35.2332,latitude)) %>%
+  mutate(longitude = ifelse(Country_Origin == "State of Palestine",31.9522,longitude)) %>%
+  mutate(latitude = ifelse(Country_Origin == "French Guiana",-53.1258,latitude)) %>%
+  mutate(longitude = ifelse(Country_Origin == "French Guiana",3.9339,longitude))  
+
+# Show data frame
+typhi_pies %>% head() %>% kable()
+
+# Add in manual scale of pie chart radius
+typhi_pies <- typhi_pies %>%
+  spread(Final_genotype,n) %>%
+  replace(is.na(.),0) %>%
+  type_convert() %>%
+  mutate(radius = sum(c_across(`0.0.1`:`4.3.1.3.Bdq`))) %>%
+  mutate(adj_radius = 1000) %>%
+  mutate(adj_radius = ifelse(radius<20,1,adj_radius)) %>%
+  mutate(adj_radius = ifelse(radius>=20 & radius<40,2,adj_radius)) %>%
+  mutate(adj_radius = ifelse(radius>=40 & radius<80,3,adj_radius)) %>%
+  mutate(adj_radius = ifelse(radius>=80 & radius<160,4,adj_radius)) %>%
+  mutate(adj_radius = ifelse(radius>=160 & radius<320,5,adj_radius)) %>%
+  mutate(adj_radius = ifelse(radius>=320 & radius<640,5,adj_radius)) %>%
+  mutate(adj_radius = ifelse(radius>=640 & radius<1280,5,adj_radius))
+
+# Show data frame
+typhi_pies %>% head() %>% kable()
+
+# Add country colours (n>20)
+typhi_pies <- typhi_pies %>%
+  rowwise() %>% 
+  mutate(total = sum(c_across(`0.0.1`:`4.3.1.3.Bdq`))) %>%
+  mutate(country_colour = ifelse(total>20,"cornsilk1","grey")) 
+
+# Show data frame structure
+typhi_pies %>% head() %>% kable()
+
+# Just get genotype counts
+genotypes <- typhi_pies[,4:69] %>%
+  names()
+
+# Add counts & colours to ggplot map data
+typhi_map_counts <- map_data('world') %>%
+  group_by(region) %>%
+  left_join(typhi_pies %>% select(Country_Origin,total,country_colour), by = c('region' = 'Country_Origin'))
+
+# Show modified ggplot map data frame structure
+typhi_map_counts %>% head() %>% kable()
+
+
+```
+
+
+## Plot data: World map of travel-associated S. Typhi cases with regions shaded (n>20)
+```{r plot_map_with_pies}
+
+# Plot map
+ggplot(typhi_map_counts, aes(long, lat)) +
+  geom_map(map=typhi_map_counts, aes(map_id=region), fill=typhi_map_counts$country_colour, color="black") +
+  coord_quickmap() + 
+  theme_classic()
+
+# Plot pie charts on map
+ggplot(typhi_map_counts, aes(long, lat)) +
+  geom_map(map=typhi_map_counts, aes(map_id=region), fill=typhi_map_counts$country_colour, color="black") +
+  coord_quickmap() + 
+  theme_classic() +  
+  geom_scatterpie(data=typhi_pies, aes(x=latitude, y=longitude, group=Country_Origin, r=adj_radius, alpha=.99), 
+                           cols=c(genotypes)) + 
+  scale_fill_manual(values=genotype_cols) +
+  guides(fill="none") + 
+  geom_scatterpie_legend(typhi_pies$adj_radius, x=-140, y=-70)
+```
