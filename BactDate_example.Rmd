@@ -1,0 +1,225 @@
+---
+title: "BactDate_example"
+author: "Zoe A. Dyson, zoe.dyson(at)lshtm.ac.uk"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    number_sections: TRUE
+    fig_width: 8
+    fig_height: 8
+---
+
+## Setup knitr
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Table of contents
+- [Root-to-tip regression](#roottotip)  
+- [BactDating MCMC model selection](#bactdatingmodelselection)
+- [BactDating MCMC analysis plots](#bactdatingmcmcplots)
+- [BactDating MCMC temporal signal](#temporaltest)
+- [Output dated tree with annotations](#outputtree)
+
+## Load packages & track versions
+```{r load_packages}
+# R version
+R.Version()$version.string
+
+# Reporting
+library(knitr)
+packageVersion("knitr")
+
+# Wrangling
+library(tidyverse)
+packageVersion("tidyverse")
+
+library(lubridate)
+packageVersion("lubridate")
+
+library(coda)
+packageVersion("coda")
+
+# Phylo
+library(BactDating)
+packageVersion("BactDating")
+
+library(ape)
+packageVersion("ape")
+
+library(ggtree)
+packageVersion("ggtree")
+
+library(treeio)
+packageVersion("treeio")
+
+```
+
+## Setup R environment
+```{r setup_r_env}
+
+# Set seed
+set.seed(3551)
+
+# Setup `not in` operator
+`%notin%` <- Negate(`%in%`)
+
+# Setup number chain length/iterations
+chain_length <- 1e6
+
+# Set working directory 
+setwd("~/Dropbox/example_file_path")
+
+```
+
+## Import data
+```{r import_data}
+
+# Import post-gubbins tree & root on outgroup
+tree <- loadGubbins("GUBBINS")
+
+# Import metadata 
+meta <- read_csv("metadata.csv")
+
+```
+
+## Format data for BactDating analyses
+```{r wrangling}
+
+# Get ingroup/outgroup sequences
+ingroup_sequences <- meta %>%
+  filter(LANE_ID %in% tree$tip.label) %>%
+  select(LANE_ID) %>%
+  pull()
+
+outgroup_sequences <- tree$tip.label[tree$tip.label %notin% ingroup_sequences] 
+
+# Remove outgroups from tree
+for (tip in 1:length(outgroup_sequences)) {
+  tree <- drop.tip.useRec(tree, outgroup_sequences[tip])
+}
+
+# Order dates vector to match order of tips
+dates <- meta %>%
+  mutate(collection_date = as.Date(date_enrolled,"%d/%m/%Y")) %>%
+  mutate(decimal_years = decimal_date(collection_date)) %>%
+  select(LANE_ID, decimal_years) %>%
+  slice(match(tree$tip.label, LANE_ID)) %>%
+  deframe() 
+
+# Plot tree
+plot(tree)
+ape::axisPhylo(backward=F)
+
+```
+
+ 
+## Root-to-tip regression analysis for temporal signal {#roottotip}
+```{r root_to_tip_regression}
+
+# Root to tip regression
+roottotip(tree,dates) 
+
+```
+
+
+## MCMC BactDating model selection {#bactdatingmodelselection}
+```{r model_selection}
+
+# Strict clock
+bactdating_strict_mcmc <- bactdate(tree,dates,
+                                   model='mixedgamma',
+                                   nbIts=chain_length,
+                                   useRec = T,
+                                   updateRoot = F,
+                                   showProgress = F)
+bactdating_strict_mcmc
+plot(bactdating_strict_mcmc,type="trace")
+try(plot(bactdating_strict_mcmc, type="scatter"))
+bactdating_strict_mcmc$pstrict
+
+# Relaxed clock
+bactdating_relaxed_mcmc <- bactdate(tree,dates,
+                                    model='relaxedgamma',
+                                    nbIts=chain_length,
+                                    useRec = T,
+                                    updateRoot = F,
+                                    showProgress = F)
+bactdating_relaxed_mcmc
+plot(bactdating_relaxed_mcmc,type='trace')
+try(plot(bactdating_relaxed_mcmc, type="scatter"))
+bactdating_relaxed_mcmc$prelaxed
+
+# Check if ESS sufficient for model comparison
+effectiveSize(as.mcmc.resBactDating(bactdating_strict_mcmc))
+effectiveSize(as.mcmc.resBactDating(bactdating_relaxed_mcmc))
+
+# Compare models
+modelcompare(bactdating_strict_mcmc,bactdating_relaxed_mcmc)
+
+```
+
+
+## MCMC select best fit model & plot {#bactdatingmcmcplots}
+```{r mcmc_plots}
+
+# Select best fitting model 
+bactdating_mcmc <- bactdating_relaxed_mcmc 
+
+# Plot tree with CI
+plot(bactdating_mcmc,'treeCI',show.tip.label = F)
+
+# Plot most likely root
+plot(bactdating_mcmc,'treeRoot',show.tip.label=F)
+```
+
+## Test for temporal signal {#temporaltest}
+```{r temporal_test}
+
+# Force dates to be equal 
+bactdating_mcmc_testdates <- bactdate(tree,
+                                      rep(2015,length(dates)),
+                                      nbIts=chain_length,
+                                      model='mixedgamma',
+                                      useRec = T,
+                                      updateRoot = F,
+                                      showProgress = F)
+
+# Compare models
+modelcompare(bactdating_mcmc,bactdating_mcmc_testdates)
+
+# Randomise tip dates
+rando_dates <- sample(dates)
+names(rando_dates) <- names(dates)
+
+bactdating_mcmc_randodates <- bactdate(tree,
+                                      rando_dates,
+                                      nbIts=chain_length,
+                                      model='mixedgamma',
+                                      useRec = T,
+                                      updateRoot = F,
+                                      showProgress = F)
+# Compare models
+modelcompare(bactdating_mcmc,bactdating_mcmc_randodates)
+
+```
+
+
+## Output beast-ish tree {#outputtree}
+```{r output_dated_tree}
+
+# Make beast-ish tree file
+beast_tree <- as.treedata.resBactDating(bactdating_mcmc)
+beast_tree <- methods::new('treedata',phylo=beast_tree[[1]],data=dplyr::tbl_df(as.data.frame(beast_tree[[2]])))
+
+# Plot tree for sanity check
+ggtree(beast_tree, mrsd=date_decimal(max(dates))) + 
+  geom_range(range='length_0.95_HPD', color='red', alpha=.6, size=2) +
+  geom_text(aes(label=node)) + 
+  theme_tree2()
+
+# Output tree file
+write.beast(beast_tree, "BactDating_tree.tree")
+```
+
