@@ -1,2 +1,2 @@
-# Holt_lab_meeting_show_and_tell_demos
+# Holt lab meeting code examples
 Example code for Holt lab meeting 'show and tell' presentations
