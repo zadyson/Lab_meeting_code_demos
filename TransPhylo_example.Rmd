@@ -67,7 +67,7 @@ packageVersion("ggplot2")
 set.seed(3551)
 
 # set working directory
-setwd("/Users/lshzd1/Dropbox/Presentations/Holt_lab_meetings/21022022_Show_and_tell_Tanggle")
+setwd("~/Dropbox/Presentations/Holt_lab_meetings/21022022_Show_and_tell_TransPhylo")
 
 ```
 
