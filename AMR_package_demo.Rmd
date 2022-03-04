@@ -1,0 +1,294 @@
+---
+title: "AMR_package_demo"
+author: "Zoe A. Dyson, zoe.dyson(at)lshtm.ac.uk"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    number_sections: TRUE
+    fig_width: 8.27
+    fig_height: 11.69
+---
+# See https://github.com/ceefluz/AMR & https://msberends.github.io/
+
+## Setup knitr
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Load packages & track versions
+```{r load_packages}
+# R version
+R.Version()$version.string
+
+# Wrangling
+library(tidyverse)
+packageVersion("tidyverse")
+
+# Reporting
+library(knitr)
+packageVersion("knitr")
+
+library(prettydoc)
+packageVersion("prettydoc")
+
+# Plotting
+library(ggplot2)
+packageVersion("ggplot2")
+
+# AMR analyses
+library(AMR)
+packageVersion("AMR")
+```
+
+
+## Import data
+```{r import_data}
+
+# load csv with rsi & mic data
+typhi <- read_csv("~/Dropbox/Presentations/Holt_lab_meetings/04032022_show_and_tell_AMR/MIC.csv")
+
+```
+
+
+## Wrangle data
+```{r wrangle_data}
+
+# Check if data are eligble for rsi data type
+colnames(typhi)[is.rsi.eligible(typhi)]
+
+# Convert data types & set taxonomic info (RSI)
+typhi_rsi <- typhi %>%
+  filter_all(any_vars(!is.na(.))) %>%
+  filter_all(all_vars((.) != "not tested"))%>%
+  drop_na() %>%
+  select(`Organism Identified`,ST,
+         `AMX -   R> 8mg/L`,`AMX-CL -   R> 8mg/L`,
+         `CAZ -  S ≤ 1,  R > 4 mg/L`,`CRO  -    R> 0.5mg/L`,
+         `ETP -    R> 0.5mg/L`, `GEN -    R> 2mg/L`, `CIP -    R> 0.06mg/L - Typhi`,
+         `AZM-    R> 16mg/L`, `TMP-    R> 4mg/L`,
+         `FOS-    R> 32mg/L`,`TET-    R> 32mg/L`,
+         `SXT -  S ≤ 2,  R > 4 mg/L`,`CHL-    R> 8mg/L`,
+         `COL-    R> 2mg/L`) %>%
+  mutate(gramstain = mo_gramstain(`Organism Identified`),
+         genus = mo_genus(`Organism Identified`),
+         species = mo_species(`Organism Identified`),
+         bacteria = as.mo(`Organism Identified`)) %>%
+  drop_na() %>%
+  mutate(across(where(is.rsi.eligible), as.rsi))
+
+# Check RSI format
+typhi_rsi %>% head()
+typhi_rsi %>% head() %>% kable()
+
+# Convert data types & set taxonomic info (MIC)
+typhi_mic <- typhi %>%
+  filter_all(any_vars(!is.na(.))) %>%
+  filter_all(all_vars((.) != "not tested"))%>%
+  filter_all(all_vars((.) != 0))%>%
+  drop_na() %>%
+  mutate(across(c(`AMX - Amoxicillin`,`Amoxicillin-clavulanic acid`,
+                  `CHL - Chloramphenicol`,
+                  `CAZ - Ceftazidime`,`CRO - Ceftriaxone`,`ETP - Ertapenem`,
+                  `GEN - Gentamicin`,`CIP - Ciprofloxacin`,`AZM - Azithromycin`,
+                  `TMP - Trimethoprim`,`FOS - Fosfomycin`,`TET - Tetracycline`,
+                  `SXT - Trimethoprim-Sulfamethoxazole`,`CHL - Chloramphenicol`,
+                  `COL - Colistin`), as.mic)) %>%
+  select(`Organism Identified`,ST,`AMX - Amoxicillin`,`Amoxicillin-clavulanic acid`,
+                  `CHL - Chloramphenicol`,
+                  `CAZ - Ceftazidime`,`CRO - Ceftriaxone`,`ETP - Ertapenem`,
+                  `GEN - Gentamicin`,`CIP - Ciprofloxacin`,`AZM - Azithromycin`,
+                  `TMP - Trimethoprim`,`FOS - Fosfomycin`,`TET - Tetracycline`,
+                  `SXT - Trimethoprim-Sulfamethoxazole`,`CHL - Chloramphenicol`,
+                  `COL - Colistin`) %>%
+  mutate(gramstain = mo_gramstain(`Organism Identified`),
+         genus = mo_genus(`Organism Identified`),
+         species = mo_species(`Organism Identified`),
+         bacteria = as.mo(`Organism Identified`))
+
+# Check MIC format
+typhi_mic %>% head() %>% kable()
+
+```
+
+
+## Analyse RSI data
+```{r analyse_rsi_data}
+
+# Return Betalactams resistant strains
+typhi_rsi %>% 
+  filter(any(betalactams() == "R"))
+
+# Bug & drug combinations (all drug classes)
+typhi_rsi %>% 
+  bug_drug_combinations() %>% 
+  head() %>%
+  kable()
+
+# Bug & drug combinations for just betalactams
+typhi_rsi %>% 
+  select(species, aminoglycosides()) %>% 
+  bug_drug_combinations() %>%
+  head() %>%
+  kable()
+
+# Get resistance frequencies
+typhi_rsi %>% 
+  summarise(amoxicillin = resistance(`AMX -   R> 8mg/L`),
+            available = n_rsi(`AMX -   R> 8mg/L`))
+
+# Get susceptibility for multiple drugs
+typhi_rsi %>% 
+  summarise(amoxicillin = susceptibility(`AMX -   R> 8mg/L`),
+            amoxiclav = susceptibility(`AMX-CL -   R> 8mg/L`),
+            amoxiclav_genta = susceptibility(`AMX -   R> 8mg/L`, `AMX-CL -   R> 8mg/L`)) %>%
+  kable()
+
+# Get resistance frequencies by drug class
+typhi_rsi %>% 
+  summarise(across(betalactams(), resistance, as_percent = TRUE)) %>% 
+  rename_with(set_ab_names, betalactams()) %>%
+  kable()
+
+# Plot resistance
+typhi_rsi %>% 
+  group_by(species) %>%
+  summarise("1. Amoxicilin" = susceptibility(`AMX -   R> 8mg/L`),
+            "2. Amoxi/clav" = susceptibility(`AMX-CL -   R> 8mg/L`),
+            "3. Ertapenem"= susceptibility(`ETP -    R> 0.5mg/L`)) %>% 
+  pivot_longer(-species, names_to = "antibiotic") %>% 
+  ggplot(aes(x = species,
+             y = value,
+             fill = antibiotic)) +
+  geom_col(position = "dodge2")
+
+
+# Plot RSI for all drug classes
+ggplot(typhi_rsi) +
+  geom_rsi(translate_ab = FALSE) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# Plot RSI for all drug classes (but with names fixed)
+ggplot(typhi_rsi) +
+  geom_rsi(translate_ab = TRUE) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# Plot resistance frequencies by drug class (facet)
+typhi_rsi %>% 
+  group_by(species) %>%
+  ggplot_rsi(x = "species",
+             facet = "antibiotic",
+             breaks = 0:4 * 25,
+             datalabels = FALSE) +
+  coord_flip()
+
+
+# Call MDR/XDR/PDR 
+# Magiorakos AP, Srinivasan A et al. "Multidrug-resistant, extensively 
+# drug-resistant and pandrug-resistant bacteria: an international expert 
+# proposal for interim standard definitions for acquired resistance." 
+# Clinical Microbiology and Infection (2012) (link)
+typhi_rsi <- typhi_rsi %>%
+  mdro()
+
+typhi_rsi %>% head(20) %>% kable()
+
+```
+
+
+## Analyse MIC data
+```{r analyse_mic_data}
+
+# Plot MIC values for CIP
+autoplot(typhi_mic$`CIP - Ciprofloxacin`, mo = "S. enterica", ab = "cipro")
+
+# Plot MIC values for CHL
+autoplot(typhi_mic$`CHL - Chloramphenicol`, mo = "S. enterica", ab = "chloramphenicol")
+
+# Convert MIC to RSI
+typhi_mic_rsi <- typhi_mic %>%
+  mutate_at(vars(`AMX - Amoxicillin`,`Amoxicillin-clavulanic acid`,
+                 `CHL - Chloramphenicol`,
+                 `CAZ - Ceftazidime`,`CRO - Ceftriaxone`,`ETP - Ertapenem`,
+                 `GEN - Gentamicin`,`CIP - Ciprofloxacin`,`AZM - Azithromycin`,
+                 `TMP - Trimethoprim`,`FOS - Fosfomycin`,`TET - Tetracycline`,
+                 `SXT - Trimethoprim-Sulfamethoxazole`,`CHL - Chloramphenicol`,
+                 `COL - Colistin`), 
+            as.rsi, mo = .$species)
+
+typhi_mic_rsi %>% head() %>% kable()
+```
+
+
+## Analyse MIC -> RSI data
+```{r analyse_mic2rsi_data}
+
+# Return Betalactams resistant strains
+typhi_mic_rsi %>% 
+  filter(any(betalactams() == "R"))
+
+# Bug & drug combinations (all drug classes)
+typhi_mic_rsi %>% 
+  bug_drug_combinations() %>% 
+  head() %>%
+  kable()
+
+# Bug & drug combinations for just betalactams
+typhi_mic_rsi %>% 
+  select(species, aminoglycosides()) %>% 
+  bug_drug_combinations() %>%
+  head() %>%
+  kable()
+
+# Get resistace frequencies
+typhi_mic_rsi %>% 
+  summarise(amoxicillin = resistance(`AMX - Amoxicillin`),
+            available = n_rsi(`AMX - Amoxicillin`))
+
+# Get susceptibility for multiple drugs
+typhi_mic_rsi %>% 
+  summarise(amoxicillin = susceptibility(`AMX - Amoxicillin`),
+            amoxiclav = susceptibility(`Amoxicillin-clavulanic acid`),
+            amoxiclav_genta = susceptibility(`AMX - Amoxicillin`,`Amoxicillin-clavulanic acid`)) %>%
+  kable()
+
+# Get resistance frequencies by drug class
+typhi_mic_rsi %>% 
+  summarise(across(betalactams(), resistance, as_percent = TRUE)) %>% 
+  rename_with(set_ab_names, betalactams()) %>%
+  kable()
+
+# Plot resistance
+typhi_mic_rsi %>% 
+  group_by(species) %>%
+  summarise("1. Amoxicilin" = susceptibility(`AMX - Amoxicillin`),
+            "2. Amoxi/clav" = susceptibility(`Amoxicillin-clavulanic acid`),
+            "3. Ertapenem"= susceptibility(`ETP - Ertapenem`)) %>% 
+  pivot_longer(-species, names_to = "antibiotic") %>% 
+  ggplot(aes(x = species,
+             y = value,
+             fill = antibiotic)) +
+  geom_col(position = "dodge2")
+
+
+# Plot RSI for all drug classes
+ggplot(typhi_mic_rsi) +
+  geom_rsi(translate_ab = FALSE) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# Plot RSI for all drug classes (but with names fixed)
+ggplot(typhi_mic_rsi) +
+  geom_rsi(translate_ab = TRUE) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# Plot resistance frequencies by drug class (facet)
+typhi_mic_rsi %>% 
+  group_by(species) %>%
+  ggplot_rsi(x = "species",
+             facet = "antibiotic",
+             breaks = 0:4 * 25,
+             datalabels = FALSE) +
+  coord_flip()
+
+```
