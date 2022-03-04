@@ -9,7 +9,8 @@ output:
     fig_width: 8.27
     fig_height: 11.69
 ---
-# See https://github.com/ceefluz/AMR & https://msberends.github.io/
+
+- See https://github.com/ceefluz/AMR & https://msberends.github.io/
 
 ## Setup knitr
 ```{r setup, include=FALSE}
