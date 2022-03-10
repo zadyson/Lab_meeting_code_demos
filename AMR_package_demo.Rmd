@@ -10,7 +10,6 @@ output:
     fig_height: 11.69
 ---
 
-- See https://github.com/ceefluz/AMR & https://msberends.github.io/
 
 ## Setup knitr
 ```{r setup, include=FALSE}
@@ -48,7 +47,7 @@ packageVersion("AMR")
 ```{r import_data}
 
 # load csv with rsi & mic data
-typhi <- read_csv("~/Dropbox/Presentations/Holt_lab_meetings/04032022_show_and_tell_AMR/MIC.csv")
+typhi <- read_csv("MIC.csv")
 
 ```
 
@@ -127,7 +126,7 @@ typhi_rsi %>%
   head() %>%
   kable()
 
-# Bug & drug combinations for just betalactams
+# Bug & drug combinations for just aminoglycosides
 typhi_rsi %>% 
   select(species, aminoglycosides()) %>% 
   bug_drug_combinations() %>%
@@ -189,9 +188,9 @@ typhi_rsi %>%
 # Magiorakos AP, Srinivasan A et al. "Multidrug-resistant, extensively 
 # drug-resistant and pandrug-resistant bacteria: an international expert 
 # proposal for interim standard definitions for acquired resistance." 
-# Clinical Microbiology and Infection (2012) (link)
+# Clinical Microbiology and Infection (2012) 
 typhi_rsi <- typhi_rsi %>%
-  mdro()
+  mutate(AMR_category = mdro(.))
 
 typhi_rsi %>% head(20) %>% kable()
 
@@ -235,7 +234,7 @@ typhi_mic_rsi %>%
   head() %>%
   kable()
 
-# Bug & drug combinations for just betalactams
+# Bug & drug combinations for just aminoglycosides
 typhi_mic_rsi %>% 
   select(species, aminoglycosides()) %>% 
   bug_drug_combinations() %>%
